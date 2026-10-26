@@ -77,6 +77,22 @@ def test_backup_restores_every_row(tmp_path):
     assert con.execute("SELECT rowid, header FROM words WHERE words MATCH 'duty'").fetchall() == [(42, "Torts")]
 
 
+def test_a_table_this_sqlite_cannot_read_is_reported_not_failed(tmp_path):
+    """A virtual table whose extension is missing here (sqlite-vec's vec0, say) is
+    listed as not copied, and the restore test of everything else still passes."""
+    f = settings(tmp_path)
+    con = sqlite3.connect(tmp_path / "data" / "app.sqlite3")
+    con.execute("PRAGMA writable_schema = ON")
+    con.execute("INSERT INTO sqlite_master VALUES ('table', 'vecs', 'vecs', 0,"
+                " 'CREATE VIRTUAL TABLE vecs USING nosuchmodule(embedding)')")
+    con.commit()
+    con.close()
+    assert m.send(f, save_to=tmp_path / "out", say=lambda s: None) == 0
+    text = next((tmp_path / "out").glob("*.txt")).read_text()
+    assert "vecs: not copied (this machine's SQLite cannot read it" in text
+    assert "restore test passed" in text and "PROBLEM" not in text
+
+
 def test_wrong_password_is_refused(tmp_path):
     f = settings(tmp_path)
     m.send(f, save_to=tmp_path / "out", say=lambda s: None)

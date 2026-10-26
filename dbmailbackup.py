@@ -189,8 +189,13 @@ def export_json(db: pathlib.Path, skip: list[str], out: pathlib.Path) -> dict:
     return summary
 
 
-def restore_json(src: pathlib.Path, db: pathlib.Path) -> list[str]:
-    """Build a database from a backup JSON file.  Returns notes on anything it could not do."""
+def restore_json(src: pathlib.Path, db: pathlib.Path, expected: set[str] = frozenset()) -> list[str]:
+    """Build a database from a backup JSON file.  Returns notes on anything it could not do.
+
+    `expected` names tables already reported as unreadable when the file was
+    made (a virtual table whose extension this SQLite lacks): that they cannot
+    be made here either is no news, so it is not a note.
+    """
     data = json.loads(src.read_text(encoding="utf-8"))
     if "sqlite_sequence" in data.get("tables", {}):            # last, after the rows that refill it
         data["tables"]["sqlite_sequence"] = data["tables"].pop("sqlite_sequence")
@@ -211,7 +216,10 @@ def restore_json(src: pathlib.Path, db: pathlib.Path) -> list[str]:
                 con.execute(o["sql"])
                 made.add(o["name"])
             except sqlite3.Error as e:
-                notes.append(f"table {o['name']} could not be made here ({e}); its rows are in the file")
+                if o["name"] not in expected:
+                    held = ("its rows are in the file" if o["name"] in data["tables"]
+                            else "the file holds no rows for it")
+                    notes.append(f"table {o['name']} could not be made here ({e}); {held}")
     for name, t in data["tables"].items():
         if name == "sqlite_sequence":
             con.execute("DELETE FROM sqlite_sequence")   # refilled by the inserts above; the originals win
@@ -225,7 +233,8 @@ def restore_json(src: pathlib.Path, db: pathlib.Path) -> list[str]:
             try:
                 con.execute(o["sql"])
             except sqlite3.Error as e:
-                notes.append(f"{o['type']} {o['name']} could not be made here ({e})")
+                if o["table"] not in expected:
+                    notes.append(f"{o['type']} {o['name']} could not be made here ({e})")
     con.commit()
     con.close()
     return notes
@@ -374,7 +383,7 @@ def send(settings_file: pathlib.Path, save_to: pathlib.Path | None = None, brevo
             out = tmp / f"{label}-{today}.json"
             summary = export_json(snap, entry.get("skip-tables", []), out)
             rebuilt = tmp / f"rebuilt-{db.name}"
-            notes = restore_json(out, rebuilt)
+            notes = restore_json(out, rebuilt, set(summary["unreadable"]))
             bad = check(snap, rebuilt, summary["tables"])
             rows = sum(summary["tables"].values())
             verdict = ("restore test passed: every row matches" if not bad and not notes
