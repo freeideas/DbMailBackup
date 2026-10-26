@@ -174,3 +174,21 @@ def test_unchanged_databases_send_a_short_note(tmp_path, monkeypatch):
     con.execute("INSERT INTO note VALUES (1, 'new')"); con.commit(); con.close()
     m.send(f, brevo_key="k", say=lambda s: None)
     assert sent[2][2] is not None and "no change" not in sent[2][0]
+
+
+def test_a_pattern_backs_up_every_matching_database(tmp_path, monkeypatch):
+    f = settings(tmp_path)
+    for book in ("one", "two"):
+        (tmp_path / "data" / "books" / book).mkdir(parents=True)
+        con = sqlite3.connect(tmp_path / "data" / "books" / book / "data.sqlite3")
+        con.execute("CREATE TABLE fact (text TEXT)"); con.execute("INSERT INTO fact VALUES (?)", (book,))
+        con.commit(); con.close()
+    s = json.loads(f.read_text())
+    s["databases"].append({"file": "data/books/*/data.sqlite3"})
+    f.write_text(json.dumps(s))
+    assert m.send(f, save_to=tmp_path / "out", say=lambda s: None) == 0
+    text = next((tmp_path / "out").glob("*.txt")).read_text()
+    assert text.count("restore test passed") == 3
+    with zipfile.ZipFile(next((tmp_path / "out").glob("*.zip"))) as z:
+        names = sorted(n.rsplit("-", 3)[0] for n in z.namelist())
+    assert names == ["app", "data", "two-data"]

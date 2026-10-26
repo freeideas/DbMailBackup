@@ -369,20 +369,33 @@ def send(settings_file: pathlib.Path, save_to: pathlib.Path | None = None, brevo
     lines, problems, files = [], [], []
     with tempfile.TemporaryDirectory() as tmp_name:
         tmp = pathlib.Path(tmp_name)
+        found = []
         for entry in settings["databases"]:
+            if any(c in entry["file"] for c in "*?["):   # a pattern: every database it matches, new ones too
+                matches = sorted(p for p in base.glob(entry["file"]) if p.is_file())
+                if not matches:
+                    lines.append(f"{entry['file']}: no databases match yet.")
+                found.extend((p.resolve(), {**entry, "name": None}) for p in matches)
+                continue
             db = (base / entry["file"]).resolve()
             if not db.is_file():
                 problems.append(f"{entry['file']}: not found")
                 continue
-            snap = tmp / db.name                      # a consistent copy, even while the app writes
+            found.append((db, entry))
+        labels = set()
+        for db, entry in found:
+            # a name for its JSON file: two databases called data.sqlite3 are told
+            # apart by their folders
+            label, up = entry.get("name") or db.stem, db.parent
+            while label in labels and up != up.parent:
+                label, up = f"{up.name}-{label}", up.parent
+            labels.add(label)
+            snap = tmp / f"{label}.sqlite3"           # a consistent copy, even while the app writes
             with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as src, sqlite3.connect(snap) as dst:
                 src.backup(dst)
-            label = entry.get("name") or db.stem
-            if any(f.name.startswith(label + "-") for f in files):   # two files called data.sqlite3, say
-                label = f"{db.parent.name}-{label}"
             out = tmp / f"{label}-{today}.json"
             summary = export_json(snap, entry.get("skip-tables", []), out)
-            rebuilt = tmp / f"rebuilt-{db.name}"
+            rebuilt = tmp / f"rebuilt-{label}.sqlite3"
             notes = restore_json(out, rebuilt, set(summary["unreadable"]))
             bad = check(snap, rebuilt, summary["tables"])
             rows = sum(summary["tables"].values())
