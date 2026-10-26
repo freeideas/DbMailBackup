@@ -23,6 +23,7 @@ CREATE TABLE audit (what TEXT);
 CREATE TRIGGER person_added AFTER INSERT ON person BEGIN INSERT INTO audit VALUES ('added ' || new.name); END;
 CREATE VIRTUAL TABLE place USING rtree(id, minx, maxx, miny, maxy);
 CREATE TABLE plain (k TEXT PRIMARY KEY, v) WITHOUT ROWID;
+CREATE VIRTUAL TABLE words USING fts5(header, body);
 """
 
 
@@ -36,6 +37,8 @@ def make_db(path: pathlib.Path) -> None:
     con.execute("INSERT INTO secret VALUES ('do-not-send')")
     con.execute("INSERT INTO place VALUES (7, 1.5, 2.5, -8.5, -8.25)")
     con.executemany("INSERT INTO plain VALUES (?, ?)", [("a", 1), ("b", 2.25), ("c", None)])
+    con.execute("INSERT INTO note (rowid, person_id, body) VALUES (10, 1, 'joined by rowid')")
+    con.execute("INSERT INTO words (rowid, header, body) VALUES (42, 'Torts', 'negligence and duty')")
     con.commit()
     con.close()
 
@@ -70,6 +73,8 @@ def test_backup_restores_every_row(tmp_path):
     assert con.execute("SELECT * FROM place").fetchall() == [(7, 1.5, 2.5, -8.5, -8.25)]
     assert con.execute("SELECT * FROM loud").fetchall()
     assert sorted(con.execute("SELECT * FROM plain").fetchall()) == [("a", 1), ("b", 2.25), ("c", None)]
+    assert con.execute("SELECT rowid FROM note WHERE body = 'joined by rowid'").fetchone() == (10,)
+    assert con.execute("SELECT rowid, header FROM words WHERE words MATCH 'duty'").fetchall() == [(42, "Torts")]
 
 
 def test_wrong_password_is_refused(tmp_path):

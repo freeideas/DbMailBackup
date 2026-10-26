@@ -114,10 +114,27 @@ def _plan(con, skip: list[str]) -> tuple[list[dict], list[dict]]:
 
 
 def _columns(con, table: str) -> list[str]:
-    """The columns a row can be written to: generated ones are computed, not stored."""
-    cols = [(r[1], r[6]) for r in con.execute(f"PRAGMA table_xinfo({_q(table)})")]
-    return [name for name, hidden in cols if hidden in (0, 1)] or [r[1] for r in con.execute(
+    """The columns a row can be written to, with `rowid` first when the table keeps one of its own.
+
+    Generated columns are computed, not stored, and a virtual table's hidden
+    columns (full-text search's `rank` and the one named after the table) are
+    not data, so neither is copied.  The rowid is copied whenever no column
+    stands for it (an INTEGER PRIMARY KEY does), because other tables may
+    point at it: a full-text index is usually joined to its rows by rowid.
+    """
+    info = list(con.execute(f"PRAGMA table_xinfo({_q(table)})"))
+    cols = [r[1] for r in info if r[6] == 0] or [r[1] for r in con.execute(
         f"PRAGMA table_info({_q(table)})")]
+    if {c.lower() for c in cols} & {"rowid", "oid", "_rowid_"}:
+        return cols                              # a real column has the name; rowid cannot be reached
+    pk = [r for r in info if r[5]]
+    if len(pk) == 1 and (pk[0][2] or "").upper() == "INTEGER":
+        return cols                              # that column is the rowid
+    try:
+        con.execute(f"SELECT rowid FROM {_q(table)} LIMIT 0")
+    except sqlite3.Error:
+        return cols                              # WITHOUT ROWID
+    return ["rowid"] + cols
 
 
 def _rows(con, table: str, cols: list[str]):
