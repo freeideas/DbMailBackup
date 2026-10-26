@@ -158,3 +158,19 @@ def test_daily_sends_once_a_day(tmp_path, monkeypatch):
     assert m.daily(f, brevo_key="k", say=lambda s: None) == 0
     assert len(sent) == 2 and "database backup" in sent[0] and "files backup" in sent[1]
     assert m.daily(f, brevo_key="k", say=lambda s: None) == 0 and len(sent) == 2
+
+
+def test_unchanged_databases_send_a_short_note(tmp_path, monkeypatch):
+    f = settings(tmp_path)
+    sent = []
+    monkeypatch.setattr(m, "send_mail", lambda key, st, subject, text, att: sent.append((subject, text, att)))
+    assert m.send(f, brevo_key="k", say=lambda s: None) == 0
+    assert sent[0][2] is not None and "no change" not in sent[0][0]
+    assert m.send(f, brevo_key="k", say=lambda s: None) == 0
+    subject, text, att = sent[1]
+    assert att is None and subject.endswith(": no change") and "No change since the backup sent " in text
+    assert "is still the latest" in text and sent[0][2] is not None
+    con = sqlite3.connect(tmp_path / "data" / "app.sqlite3")
+    con.execute("INSERT INTO note VALUES (1, 'new')"); con.commit(); con.close()
+    m.send(f, brevo_key="k", say=lambda s: None)
+    assert sent[2][2] is not None and "no change" not in sent[2][0]

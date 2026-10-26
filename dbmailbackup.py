@@ -402,6 +402,20 @@ def send(settings_file: pathlib.Path, save_to: pathlib.Path | None = None, brevo
             files.append(out)
         name = f"{''.join(c for c in project if c.isalnum()) or 'backup'}-{today}.zip"
         zipped = tmp / name
+        # the databases' content, apart from the time each JSON file was made
+        content = hashlib.sha256()
+        for f in files:
+            content.update(f.name.rsplit("-", 3)[0].encode())
+            for line in f.read_text(encoding="utf-8").splitlines():
+                if not line.startswith(' "made": '):
+                    content.update(line.encode())
+        fingerprint = content.hexdigest()
+        last_file = _last_file(settings_file)
+        try:
+            last = json.loads(last_file.read_text(encoding="utf-8")) if last_file.is_file() else {}
+        except ValueError:
+            last = {}
+        unchanged = bool(files) and not problems and not save_to and last.get("fingerprint") == fingerprint
         if files:
             write_zip(zipped, files, settings["zip-password"])
         size = zipped.stat().st_size if files else 0
@@ -412,8 +426,13 @@ def send(settings_file: pathlib.Path, save_to: pathlib.Path | None = None, brevo
             lines.append(f"Warning: the backup is {_mb(size)}, two thirds of the way to the "
                          f"{_mb(int(limit))} an email can carry. Time to send only the changes.")
         subject = (f"{project} database backup {today}"
-                   + (": PROBLEM, please read" if problems else ""))
+                   + (": PROBLEM, please read" if problems else ": no change" if unchanged else ""))
         text = "\n".join([
+            f"No change since the backup sent {last.get('sent')}: the zip attached to that email "
+            f"({last.get('zip')}) is still the latest. Today's restore test passed as well.",
+            "",
+            *lines,
+        ]) if unchanged else "\n".join([
             f"The {project} databases as of {today}.",
             "",
             *(["PROBLEMS:", *(f"  - {p}" for p in problems), ""] if problems else []),
@@ -435,8 +454,14 @@ def send(settings_file: pathlib.Path, save_to: pathlib.Path | None = None, brevo
             say(f"saved {save_to / name} and its email text; nothing sent")
         else:
             key = brevo_key or creds_get(settings.get("brevo-key", "passwords/brevo-api-key"))
-            send_mail(key, settings, subject, text, zipped if files and not too_big else None)
-            say(f"sent {name} ({_mb(size)}) to {', '.join(settings['recipients'])}"
+            attach = files and not too_big and not unchanged
+            send_mail(key, settings, subject, text, zipped if attach else None)
+            if attach:
+                last_file.write_text(json.dumps({
+                    "fingerprint": fingerprint, "zip": name,
+                    "sent": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}), encoding="utf-8")
+            say((f"sent {name} ({_mb(size)})" if attach else "sent a no-change note" if unchanged
+                 else "sent a note with nothing attached") + f" to {', '.join(settings['recipients'])}"
                 + (f"; problems: {'; '.join(problems)}" if problems else ""))
         if save_to:
             say(text)
@@ -551,6 +576,12 @@ def files_due(settings_file: pathlib.Path, now: dt.datetime | None = None) -> bo
 
 
 # --- every day, inside a server ---------------------------------------------------------
+
+def _last_file(settings_file: pathlib.Path) -> pathlib.Path:
+    """What the last backup that carried a zip contained, and when it went."""
+    return _state_file(settings_file).with_name(_state_file(settings_file).name.replace(
+        ".backup-sent", ".backup-last.json"))
+
 
 def _state_file(settings_file: pathlib.Path) -> pathlib.Path:
     """Where the date of the last send is kept: beside the first database (not in the
