@@ -438,7 +438,7 @@ def send(settings_file: pathlib.Path, save_to: pathlib.Path | None = None, brevo
         elif size > limit * 2 / 3:
             lines.append(f"Warning: the backup is {_mb(size)}, two thirds of the way to the "
                          f"{_mb(int(limit))} an email can carry. Time to send only the changes.")
-        subject = (f"{project} database backup {today}"
+        subject = (f"database backup - {project} {today}"
                    + (": PROBLEM, please read" if problems else ": no change" if unchanged else ""))
         text = "\n".join([
             f"No change since the backup sent {last.get('sent')}: the zip attached to that email "
@@ -548,7 +548,7 @@ def send_files(settings_file: pathlib.Path, save_to: pathlib.Path | None = None,
             zipped = pathlib.Path(tmp_name) / name
             write_zip(zipped, [(p, k) for p, k, _, _ in batch], settings["zip-password"])
             part = f" (part {n} of {len(batches)})" if len(batches) > 1 else ""
-            subject = f"{project} files backup {today}{part}"
+            subject = f"files backup - {project} {today}{part}"
             text = "\n".join([
                 f"{len(batch)} file{'' if len(batch) == 1 else 's'} of {project} that are new or changed "
                 f"since they were last sent{part}:", "",

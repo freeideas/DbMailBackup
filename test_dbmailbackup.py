@@ -168,6 +168,7 @@ def test_unchanged_databases_send_a_short_note(tmp_path, monkeypatch):
     assert sent[0][2] is not None and "no change" not in sent[0][0]
     assert m.send(f, brevo_key="k", say=lambda s: None) == 0
     subject, text, att = sent[1]
+    assert subject.startswith("database backup - ")
     assert att is None and subject.endswith(": no change") and "No change since the backup sent " in text
     assert "is still the latest" in text and sent[0][2] is not None
     con = sqlite3.connect(tmp_path / "data" / "app.sqlite3")
