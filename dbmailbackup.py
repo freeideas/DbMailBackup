@@ -339,6 +339,22 @@ def creds_get(path: str) -> str:
     return r.stdout.strip()
 
 
+def recipients(settings: dict, base: pathlib.Path) -> list[str]:
+    """Who gets the emails: the `recipients` list, plus the addresses that
+    `recipients-query` reads from a database (one email per row, first column),
+    so a project can keep the list where its owners change it."""
+    out = list(settings.get("recipients") or [])
+    q = settings.get("recipients-query")
+    if q:
+        con = sqlite3.connect(f"file:{(base / q['database']).resolve()}?mode=ro", uri=True)
+        try:
+            out += [r[0] for r in con.execute(q["sql"]) if r[0]]
+        finally:
+            con.close()
+    seen = set()
+    return [e for e in out if not (e.lower() in seen or seen.add(e.lower()))]
+
+
 def send_mail(key: str, settings: dict, subject: str, text: str, attachment: pathlib.Path | None) -> None:
     payload = {"sender": {"email": settings["from-email"], "name": settings.get("from-name", "Backups")},
                "to": [{"email": e} for e in settings["recipients"]],
@@ -363,6 +379,9 @@ def send(settings_file: pathlib.Path, save_to: pathlib.Path | None = None, brevo
          say=print) -> int:
     settings = json.loads(settings_file.read_text(encoding="utf-8"))
     base = settings_file.resolve().parent
+    settings["recipients"] = recipients(settings, base)
+    if not settings["recipients"] and not save_to:
+        raise SystemExit("no one to send the backup to: the recipients list is empty")
     project = settings["project"]
     limit = float(settings.get("max-email-mb", 9)) * 1e6
     today = dt.date.today().isoformat()
@@ -505,6 +524,9 @@ def send_files(settings_file: pathlib.Path, save_to: pathlib.Path | None = None,
     if not folders:
         return 0
     base = settings_file.resolve().parent
+    settings["recipients"] = recipients(settings, base)
+    if not settings["recipients"] and not save_to:
+        raise SystemExit("no one to send the backup to: the recipients list is empty")
     project = settings["project"]
     limit = float(settings.get("max-email-mb", 9)) * 1e6
     room = limit * 0.75                      # an email's attachment is sent as base64, a third bigger
@@ -630,7 +652,11 @@ def daily(settings_file: pathlib.Path, brevo_key: str | None = None, say=print) 
         state = _load_files_state(settings_file)
         state["day"] = today
         _files_state_file(settings_file).write_text(json.dumps(state, indent=0), encoding="utf-8")
-        code = max(code, send_files(settings_file, brevo_key=brevo_key, say=say))
+        try:
+            code = max(code, send_files(settings_file, brevo_key=brevo_key, say=say))
+        except SystemExit as e:
+            say(f"files backup failed: {e}")
+            code = 1
     return code
 
 

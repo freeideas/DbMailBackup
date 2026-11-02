@@ -193,3 +193,27 @@ def test_a_pattern_backs_up_every_matching_database(tmp_path, monkeypatch):
     with zipfile.ZipFile(next((tmp_path / "out").glob("*.zip"))) as z:
         names = sorted(n.rsplit("-", 3)[0] for n in z.namelist())
     assert names == ["app", "data", "two-data"]
+
+
+def test_recipients_from_a_database(tmp_path, monkeypatch):
+    f = settings(tmp_path)
+    con = sqlite3.connect(tmp_path / "data" / "app.sqlite3")
+    con.execute("CREATE TABLE backup_recipient (email TEXT)")
+    con.executemany("INSERT INTO backup_recipient VALUES (?)", [("b@example.com",), ("A@example.com",)])
+    con.commit()
+    con.close()
+    s = json.loads(f.read_text())
+    s["recipients-query"] = {"database": "data/app.sqlite3", "sql": "SELECT email FROM backup_recipient"}
+    f.write_text(json.dumps(s))
+    sent = []
+    monkeypatch.setattr(m, "send_mail", lambda key, st, subject, text, att: sent.append(st["recipients"]))
+    assert m.send(f, brevo_key="k", say=lambda s: None) == 0
+    assert sent == [["a@example.com", "b@example.com"]]              # the same address once
+    s["recipients"] = []
+    s["recipients-query"]["sql"] = "SELECT email FROM backup_recipient WHERE 0"
+    f.write_text(json.dumps(s))
+    try:
+        m.send(f, brevo_key="k", say=lambda s: None)
+        assert False, "sent with no one to send to"
+    except SystemExit as e:
+        assert "recipients list is empty" in str(e)
