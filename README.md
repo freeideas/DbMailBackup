@@ -6,6 +6,14 @@ Each database becomes one JSON file: plain text holding its table definitions an
 
 It is one file, `dbmailbackup.py`, using only Python's standard library. Projects carry a copy (in their server's package) and start it from their own server, so no extra service or timer is needed: a thread of the server checks every five minutes, and the work runs in a separate process, so the server stays quick while files are zipped. This repository is the original: change it here, then copy it into the projects.
 
+## Project status
+
+Keep this section current: at the end of each work session, replace these three lines (don't append). If there is nothing left to do, say so and why, e.g. `none (finished)` or `none (parked: reason)`. `../misc/scripts/rundown.py` collects this section from every project.
+
+- Next step: none (stable tool; fix bugs as found)
+- Waiting on: nothing
+- Last action: 2026-11-02, recipients can be read from a database
+
 ## Settings
 
 Each project has one JSON settings file, committed with the project (its repository must be private, since the password is in it):
