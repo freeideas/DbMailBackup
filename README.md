@@ -8,7 +8,7 @@ It is one file, `dbmailbackup.py`, using only Python's standard library. Project
 
 ## Project status
 
-Keep this section current: at the end of each work session, replace these three lines (don't append). If there is nothing left to do, say so and why, e.g. `none (finished)` or `none (parked: reason)`. `../misc/scripts/rundown.py` collects this section from every project.
+Keep this section current: at the end of each work session, replace these three lines (don't append). If there is nothing left to do, say so and why, e.g. `none (finished)` or `none (parked: reason)`. `../LifeStaff/scripts/rundown.py` collects this section from every project.
 
 - Next step: none (stable tool; fix bugs as found)
 - Waiting on: nothing
