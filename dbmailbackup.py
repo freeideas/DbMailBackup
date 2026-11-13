@@ -371,6 +371,14 @@ def send_mail(key: str, settings: dict, subject: str, text: str, attachment: pat
         raise SystemExit(f"Brevo refused the email: {e.code} {e.read()[:300]!r}") from None
 
 
+def _pattern_label(pattern: str, path: pathlib.PurePath) -> str:
+    """A name for a database a pattern matched: what its wildcards matched, then its file name, so that
+    data/books/*/data.sqlite3 gives "one-data" and "two-data", each telling which one it is, every day alike."""
+    folders = [got for want, got in zip(pathlib.PurePath(pattern).parts[:-1], path.parts[:-1])
+               if any(c in want for c in "*?[")]
+    return "-".join([*folders, path.stem])
+
+
 def _mb(n: int) -> str:
     return f"{n / 1e6:.1f} MB" if n >= 100_000 else f"{max(1, round(n / 1000))} KB"
 
@@ -394,7 +402,8 @@ def send(settings_file: pathlib.Path, save_to: pathlib.Path | None = None, brevo
                 matches = sorted(p for p in base.glob(entry["file"]) if p.is_file())
                 if not matches:
                     lines.append(f"{entry['file']}: no databases match yet.")
-                found.extend((p.resolve(), {**entry, "name": None}) for p in matches)
+                found.extend((p.resolve(), {**entry, "name": _pattern_label(entry["file"], p.relative_to(base))})
+                              for p in matches)
                 continue
             db = (base / entry["file"]).resolve()
             if not db.is_file():
@@ -420,7 +429,7 @@ def send(settings_file: pathlib.Path, save_to: pathlib.Path | None = None, brevo
             rows = sum(summary["tables"].values())
             verdict = ("restore test passed: every row matches" if not bad and not notes
                        else f"RESTORE TEST FAILED for {', '.join(bad) or 'part of it'}")
-            lines.append(f"{db.name}: {len(summary['tables'])} tables, {rows:,} rows, "
+            lines.append(f"{label}.sqlite3: {len(summary['tables'])} tables, {rows:,} rows, "
                          f"{_mb(db.stat().st_size)} on disk; {verdict}.")
             for name, n in summary["tables"].items():
                 lines.append(f"    {name}: {n:,} row{'' if n == 1 else 's'}")

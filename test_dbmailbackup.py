@@ -192,7 +192,7 @@ def test_a_pattern_backs_up_every_matching_database(tmp_path, monkeypatch):
     assert text.count("restore test passed") == 3
     with zipfile.ZipFile(next((tmp_path / "out").glob("*.zip"))) as z:
         names = sorted(n.rsplit("-", 3)[0] for n in z.namelist())
-    assert names == ["app", "data", "two-data"]
+    assert names == ["app", "one-data", "two-data"]           # each tells which one it is
 
 
 def test_recipients_from_a_database(tmp_path, monkeypatch):

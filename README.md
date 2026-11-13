@@ -12,7 +12,7 @@ Keep this section current: at the end of each work session, replace these three 
 
 - Next step: none (stable tool; fix bugs as found)
 - Waiting on: nothing
-- Last action: 2026-11-02, recipients can be read from a database
+- Last action: 2026-11-13, a pattern names each database by what its wildcards matched (the first match was named only "data")
 
 ## Settings
 
@@ -33,7 +33,7 @@ Each project has one JSON settings file, committed with the project (its reposit
 }
 ```
 
-- `databases[].file` is relative to the settings file, and may be a pattern (`data/books/*/data.sqlite3`): every database it matches is included, new ones too. Put a plain file name first: the record of what was sent is kept beside the first database. `skip-tables` takes names or patterns (`cache_*`): leave out tables that are only short-lived or security data (sign-in sessions and codes, rate limits), or that can be rebuilt and are too big for email. Indexes and triggers of a left-out table are left out with it.
+- `databases[].file` is relative to the settings file, and may be a pattern (`data/books/*/data.sqlite3`): every database it matches is included, new ones too, each named in the zip by what the wildcards matched (`one-data`, `two-data`). Put a plain file name first: the record of what was sent is kept beside the first database. `skip-tables` takes names or patterns (`cache_*`): leave out tables that are only short-lived or security data (sign-in sessions and codes, rate limits), or that can be rebuilt and are too big for email. Indexes and triggers of a left-out table are left out with it.
 - `recipients-query` (optional): read more recipients from a database each time an email goes, so a project can let its owners change the list on its own pages: `{"database": "data/wwn.sqlite3", "sql": "SELECT email FROM backup_recipient"}` (the database relative to the settings file, one address per row in the first column). They are added to `recipients`, which may then be left out. With no one to send to, nothing is sent and the run says so.
 - `send-at-utc` is the time of day, in UTC, to send. A server that was down at that time sends when it starts again. The date of the last send is kept beside the first database, in `<database>.backup-sent`.
 - `brevo-key` is the path of the Brevo key in the credential store (`~/creds`); a server that already holds the key passes it in instead.
