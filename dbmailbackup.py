@@ -546,8 +546,8 @@ def send_files(settings_file: pathlib.Path, save_to: pathlib.Path | None = None,
         root = (base / folder["path"]).resolve()
         label = folder.get("name") or root.name
         patterns = folder.get("include") or ["*"]
-        if not root.is_dir():
-            too_big.append(f"{folder['path']}: not found")
+        if not root.is_dir():                # not made yet (no photos so far, say): nothing to send, not a fault
+            say(f"{folder['path']}: no such folder yet, so no files from it")
             continue
         for p in sorted(root.rglob("*")):
             rel = p.relative_to(root).as_posix()

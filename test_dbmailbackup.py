@@ -217,3 +217,13 @@ def test_recipients_from_a_database(tmp_path, monkeypatch):
         assert False, "sent with no one to send to"
     except SystemExit as e:
         assert "recipients list is empty" in str(e)
+
+
+def test_a_folder_not_made_yet_is_not_a_fault(tmp_path):
+    f = settings(tmp_path)
+    s = json.loads(f.read_text())
+    s["folders"] = [{"path": "data/photos"}]
+    f.write_text(json.dumps(s))
+    said = []
+    assert m.send_files(f, save_to=tmp_path / "out", say=said.append) == 0
+    assert said == ["data/photos: no such folder yet, so no files from it"]
