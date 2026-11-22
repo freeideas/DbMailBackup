@@ -100,10 +100,13 @@ def _plan(con, skip: list[str]) -> tuple[list[dict], list[dict]]:
         if any(name != v and name.startswith(v + "_") for v in virtual):
             o["note"] = "internal part of a virtual table; rebuilt from it"
         elif any(fnmatch.fnmatch(name, pattern) for pattern in skip):
-            o["note"] = "left out by the settings"
+            # Its definition is kept and only its rows are left out, so the rebuilt database has every table the
+            # program expects, empty: one whose rows can be made again (a search index, sign-in sessions) but
+            # whose table was missing would not open at all.
+            o["note"], o["kept"] = "rows left out by the settings; the table is kept, empty", True
         elif not name.startswith("sqlite_"):
             tables.append(o)
-    gone = {o["name"] for o in objects if o.get("note")}
+    gone = {o["name"] for o in objects if o.get("note") and not o.get("kept")}
     for o in objects:
         if o["type"] != "table" and o["table"] in gone:
             o["note"] = f"belongs to {o['table']}, which is not copied"
@@ -163,7 +166,7 @@ def export_json(db: pathlib.Path, skip: list[str], out: pathlib.Path) -> dict:
                 "how_to_restore": "uv run dbmailbackup.py restore THIS_FILE OUT_DIR "
                                   "(github.com/freeideas/DbMailBackup), or read it: it is plain JSON.",
                 "schema": [{k: o[k] for k in ("type", "name", "table", "sql")} for o in objects
-                           if not o.get("note") and not o["name"].startswith("sqlite_")],
+                           if (not o.get("note") or o.get("kept")) and not o["name"].startswith("sqlite_")],
                 "left_out": summary["left_out"]}
         f.write(json.dumps(head, ensure_ascii=False, indent=1)[:-2] + ',\n "tables": {')
         first = True

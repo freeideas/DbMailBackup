@@ -61,11 +61,12 @@ def test_backup_restores_every_row(tmp_path):
     assert "restore test passed" in text and "secret: not copied" in text and "PROBLEM" not in text
     with zipfile.ZipFile(zipped) as z:                        # the standard library opens it, with the password
         doc = json.loads(z.read(z.namelist()[0], pwd=b"pw 1"))
-    assert "do-not-send" not in json.dumps(doc) and "secret_token" not in json.dumps(doc)
+    assert "do-not-send" not in json.dumps(doc) and "secret" not in doc["tables"]      # its rows are not there
     assert m.restore(zipped, tmp_path / "back", "pw 1") == 0
     con = sqlite3.connect(tmp_path / "back" / "app.sqlite3")
     assert con.execute("SELECT name, photo, score, shout FROM person").fetchall() == [
         ("Áine", bytes(range(256)), 1.5, "ÁINE")]
+    assert con.execute("SELECT count(*) FROM secret").fetchone() == (0,)       # left out: the table is there, empty
     assert con.execute("SELECT * FROM audit").fetchall() == [("added Áine",), ("added Bríd",)]   # no trigger re-ran
     assert con.execute("SELECT seq FROM sqlite_sequence WHERE name = 'person'").fetchone() == (2,)
     con.execute("INSERT INTO person (name) VALUES ('Cáit')")                    # numbering carries on
