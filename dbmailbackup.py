@@ -342,6 +342,14 @@ def creds_get(path: str) -> str:
     return r.stdout.strip()
 
 
+def zip_password(settings: dict) -> str:
+    """The password of the zip: "zip-password-key", its path in the credential store, or "zip-password" itself.
+    The key keeps the password out of a settings file that is committed with its project."""
+    if settings.get("zip-password-key"):
+        return creds_get(settings["zip-password-key"])
+    return settings["zip-password"]
+
+
 def recipients(settings: dict, base: pathlib.Path) -> list[str]:
     """Who gets the emails: the `recipients` list, plus the addresses that
     `recipients-query` reads from a database (one email per row, first column),
@@ -461,7 +469,7 @@ def send(settings_file: pathlib.Path, save_to: pathlib.Path | None = None, brevo
             last = {}
         unchanged = bool(files) and not problems and not save_to and last.get("fingerprint") == fingerprint
         if files:
-            write_zip(zipped, files, settings["zip-password"])
+            write_zip(zipped, files, zip_password(settings))
         size = zipped.stat().st_size if files else 0
         too_big = size > limit
         if too_big:
@@ -580,7 +588,7 @@ def send_files(settings_file: pathlib.Path, save_to: pathlib.Path | None = None,
         for n, batch in enumerate(batches, 1):
             name = f"{''.join(c for c in project if c.isalnum()) or 'backup'}-files-{today}-{n}.zip"
             zipped = pathlib.Path(tmp_name) / name
-            write_zip(zipped, [(p, k) for p, k, _, _ in batch], settings["zip-password"])
+            write_zip(zipped, [(p, k) for p, k, _, _ in batch], zip_password(settings))
             part = f" (part {n} of {len(batches)})" if len(batches) > 1 else ""
             subject = f"files backup - {project} {today}{part}"
             text = "\n".join([

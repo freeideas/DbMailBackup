@@ -228,3 +228,10 @@ def test_a_folder_not_made_yet_is_not_a_fault(tmp_path):
     said = []
     assert m.send_files(f, save_to=tmp_path / "out", say=said.append) == 0
     assert said == ["data/photos: no such folder yet, so no files from it"]
+
+
+def test_the_zip_password_can_come_from_the_credential_store(monkeypatch):
+    asked = []
+    monkeypatch.setattr(dbmailbackup, "creds_get", lambda path: asked.append(path) or "from the store")
+    assert m.zip_password({"zip-password": "in the file"}) == "in the file" and not asked
+    assert m.zip_password({"zip-password-key": "passwords/x/zip"}) == "from the store" and asked == ["passwords/x/zip"]
